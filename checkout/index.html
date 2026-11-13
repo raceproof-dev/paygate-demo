@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>paygate checkout</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<header>
+  <h1>paygate <span>checkout</span></h1>
+  <div id="conn" class="pill">paygate: …</div>
+</header>
+
+<main>
+  <section class="card" id="order">
+    <h2>Order</h2>
+    <form id="pay-form">
+      <label>Amount
+        <span class="row">
+          <input id="amount" type="number" min="1" step="0.01" value="10.00" required>
+          <select id="currency"><option>EUR</option><option>USD</option><option>GBP</option></select>
+        </span>
+      </label>
+      <label>PSP
+        <select id="psp">
+          <option value="adyen">Adyen (native 3DS2: method step, then the issuer's challenge)</option>
+          <option value="stripe">Stripe (PaymentIntent with Stripe's own 3DS page)</option>
+        </select>
+      </label>
+      <label>Test card
+        <select id="card" data-psp="adyen">
+          <option value="5454545454545454">Mastercard 5454 5454 5454 5454 (3DS2 challenge)</option>
+          <option value="4917610000000000">Visa 4917 6100 0000 0000 (3DS2 challenge)</option>
+          <option value="custom">Other card number…</option>
+        </select>
+        <select id="stripe-pm" data-psp="stripe" hidden>
+          <option value="pm_card_threeDSecure2Required">3DS2 required (challenge, then authorised)</option>
+          <option value="pm_card_threeDSecureRequiredChargeDeclined">3DS required, then the issuer declines</option>
+          <option value="pm_card_visa">Visa without 3DS (frictionless)</option>
+        </select>
+      </label>
+      <label id="custom-wrap" hidden>Card number
+        <input id="custom-pan" inputmode="numeric" autocomplete="off" placeholder="Adyen test card number">
+      </label>
+      <p class="hint" data-psp="adyen">Expiry 03/2030, CVC 737. Adyen's test challenge asks for the password <code>password</code>.</p>
+      <p class="hint" data-psp="stripe" hidden>Stripe test payment methods. On Stripe's test 3DS page, click <b>Authorize</b> (or fail it).
+        Closing the challenge leaves the payment to paygate's pending timeout (it cancels the PaymentIntent).</p>
+
+      <fieldset data-psp="adyen">
+        <legend>Shopper behaviour (edge cases)</legend>
+        <label class="check"><input type="checkbox" id="silent-method"> Issuer never answers the method step
+          <small>no method iframe: paygate refuses the payment when its method timeout runs out</small></label>
+      </fieldset>
+
+      <button id="pay" type="submit">Pay</button>
+    </form>
+  </section>
+
+  <section class="card" id="fixes-card">
+    <h2>Fixes</h2>
+    <p class="hint">Switch a fix off to see the bug it prevents (paygate <code>/_demo/fixes</code>).</p>
+    <div id="fixes"></div>
+  </section>
+
+  <section class="card wide" id="threeds">
+    <div class="head">
+      <h2>3-D Secure</h2>
+      <div class="actions">
+        <button id="repost" type="button" disabled title="Post the CReq to the ACS again, as a page refresh does">Re-post CReq</button>
+        <button id="abandon" type="button" disabled title="Close the challenge without finishing it: paygate's watchdog submits 'abandoned'">Close challenge</button>
+      </div>
+    </div>
+    <div id="status-line"><span id="status" class="status idle">no payment yet</span> <code id="payment-id"></code></div>
+    <div id="challenge-slot" class="empty">The issuer's challenge appears here.</div>
+    <iframe id="method-frame" name="method-frame" title="3DS method" hidden
+            allow="local-network-access; local-network; loopback-network"></iframe>
+  </section>
+
+  <section class="card wide">
+    <div class="head">
+      <h2>Timeline</h2>
+      <div class="actions"><button id="stop-watch" type="button" disabled>Stop watching</button></div>
+    </div>
+    <ol id="log"></ol>
+  </section>
+</main>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

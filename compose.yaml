@@ -1,0 +1,16 @@
+# Local database for paygate: `docker compose up -d`
+# Demo-only credentials; paygate holds no real card data.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: paygate
+      POSTGRES_USER: paygate
+      POSTGRES_PASSWORD: paygate
+    ports:
+      - "5544:5432"
+    volumes:
+      - paygate-db:/var/lib/postgresql/data
+
+volumes:
+  paygate-db:

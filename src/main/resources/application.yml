@@ -1,0 +1,52 @@
+server:
+  port: ${PAYGATE_PORT:8090}
+
+spring:
+  application:
+    name: paygate
+  datasource:
+    url: ${PAYGATE_DB_URL:jdbc:postgresql://127.0.0.1:5544/paygate}
+    username: ${PAYGATE_DB_USER:paygate}
+    password: ${PAYGATE_DB_PASSWORD:paygate}
+
+paygate:
+  # Where the PSP and the issuer reach paygate (used for the 3DS notification URL).
+  public-base-url: ${PAYGATE_PUBLIC_BASE_URL:http://127.0.0.1:8090}
+  adyen:
+    # The lab's fake by default; your Adyen test endpoint (e.g. https://checkout-test.adyen.com/v71) for real-sandbox mode.
+    base-url: ${ADYEN_BASE_URL:http://127.0.0.1:9100/checkout/v71}
+    api-key: ${ADYEN_API_KEY:}
+    merchant-account: ${ADYEN_MERCHANT_ACCOUNT:TestMerchant}
+    connect-timeout: ${ADYEN_CONNECT_TIMEOUT:2s}
+    read-timeout: ${ADYEN_READ_TIMEOUT:5s}
+    # Optional: save every Adyen request and answer as JSON in this folder (for fixtures). The API key is never written.
+    capture-dir: ${PAYGATE_CAPTURE_DIR:}
+    # Standard webhook settings from the Customer Area (Basic auth + HMAC key in hex). Unset = every webhook is rejected.
+    webhook:
+      username: ${ADYEN_WEBHOOK_USERNAME:}
+      password: ${ADYEN_WEBHOOK_PASSWORD:}
+      hmac-key: ${ADYEN_WEBHOOK_HMAC_KEY:}
+  stripe:
+    # The lab's Stripe fake by default; https://api.stripe.com with your test key for real-sandbox mode.
+    base-url: ${STRIPE_BASE_URL:http://127.0.0.1:9200}
+    api-key: ${STRIPE_API_KEY:}
+    # The webhook endpoint's signing secret (whsec_...). Unset = every Stripe webhook is rejected.
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    connect-timeout: ${STRIPE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${STRIPE_READ_TIMEOUT:10s}
+    # How long paygate waits for the outcome of a Stripe challenge before it cancels the PaymentIntent.
+    pending-timeout: ${PAYGATE_STRIPE_PENDING_TIMEOUT:20m}
+    # Where Stripe sends the browser back (a GET by the browser itself). Empty = public-base-url.
+    return-base-url: ${PAYGATE_STRIPE_RETURN_BASE_URL:}
+  method:
+    # How long the issuer gets for the 3DS method step before paygate refuses the payment itself (an artificial refusal).
+    timeout: ${PAYGATE_METHOD_TIMEOUT:10m}
+  challenge:
+    # How long a shopper gets for the challenge before the watchdog submits "abandoned" (transStatus U).
+    timeout: ${PAYGATE_CHALLENGE_TIMEOUT:11m}
+    watchdog-scan-interval-ms: ${PAYGATE_WATCHDOG_SCAN_MS:1000}
+  # Each fix can be switched off to show the bug it prevents. Also switchable at runtime: PUT /_demo/fixes
+  fixes:
+    c3: ${PAYGATE_FIX_C3:true}   # a 704 on the challenge step means another path already submitted it
+    s1: ${PAYGATE_FIX_S1:true}   # Stripe: return and webhook race, the first final outcome wins
+  demo-endpoints: ${PAYGATE_DEMO_ENDPOINTS:true}
