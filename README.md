@@ -13,6 +13,20 @@ paygate-demo is a demonstration, not a production gateway: **other races of thes
 unfixed**. To find out which races your own gateway has, test it with [raceproof](https://pypi.org/project/raceproof/)
 and its PSP packs.
 
+### Running C3 and S1 automatically
+
+By hand (the checkout page below, against your own Adyen or Stripe test account) a race is hard to hit: it needs two
+messages within a few milliseconds. raceproof aims them hundreds of times, but C3 and S1 need its fake Adyen and fake
+Stripe, which are in the commercial packs `raceproof-adyen` and `raceproof-stripe` (a time-limited trial is available
+on request). Each pack has a ready config for paygate-demo; then:
+
+```bash
+raceproof fake adyen                               # the fake Adyen on 127.0.0.1:9100 (paygate's default)
+raceproof run C3 --config lab.yaml                 # with C3 on: passes; PUT {"c3": false} to /_demo/fixes: fails
+```
+
+Without a pack, `pip install raceproof && raceproof demo` shows the same kind of race (R1) on a toy shop, for free.
+
 ## Run
 
 ```bash
@@ -66,6 +80,7 @@ npm run dev                          # http://127.0.0.1:5173, proxies /payments,
 | `POST /payments` `{transactionId?, merchantReference, psp?: adyen\|stripe, amount:{value,currency}, paymentMethod?}` | the merchant |
 | `GET /payments/{id}` | the merchant |
 | `POST /3ds/method`, `POST /3ds/challenge` | the issuer's ACS |
+| `POST /3ds/method/skip` `{threeDSServerTransID}` | the shopper's browser, when the method step took 10 s (goes on with threeDSCompInd N) |
 | `POST /webhooks/adyen`, `POST /webhooks/stripe` | the PSPs |
 | `GET /stripe/return/{id}` | the shopper's browser, from Stripe's 3DS page |
 | `GET/PUT /_demo/fixes` e.g. `{"c3": false}` | you, to switch fixes at runtime |

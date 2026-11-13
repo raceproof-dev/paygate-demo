@@ -20,10 +20,12 @@ import java.util.UUID;
  * <pre>
  *   POST /payments            -> IdentifyShopper (method step) or ChallengeShopper, or a final answer
  *   issuer posts method data  -> /payments/details with threeds2.fingerprint   -> ChallengeShopper or final
+ *   or the browser gives up   -> the same, with threeDSCompInd N (the method step did not complete in 10 s)
  *   issuer posts the CRes     -> /payments/details with threeds2.challengeResult -> final
  *   or the watchdog fires     -> /payments/details with transStatus U ("abandoned") -> final
  * </pre>
- * Both challenge paths use the same idempotency key, so Adyen accepts only one of them.
+ * Both challenge paths use the same idempotency key, so Adyen accepts only one of them. The two method paths have their
+ * own keys (as most gateways key a call by its source), so the second fingerprint Adyen sees gets 422/704.
  */
 @Service
 public class PaymentService {
@@ -78,30 +80,43 @@ public class PaymentService {
 
     // ------------------------------------------------------------------ method step
 
+    /** The issuer's ACS collected the browser data and posted back: the method step completed. */
     public void onMethodData(String threeDsMethodData) {
         String transId = codec.decodeBase64Url(threeDsMethodData).path("threeDSServerTransID").asText(null);
+        submitFingerprint(transId, "Y", "method", ":fingerprint");
+    }
+
+    /**
+     * The browser waited 10 s for the method step and gave up (EMV 3DS: continue with threeDSCompInd N). The ACS's
+     * notification can still arrive at the same moment: a race between the two method paths.
+     */
+    public void onMethodSkipped(String transId) {
+        submitFingerprint(transId, "N", "skip", ":fingerprint-skip");
+    }
+
+    private void submitFingerprint(String transId, String compInd, String source, String keySuffix) {
         Payment payment = paymentFor(transId);
         if (payment.status() != PaymentStatus.PENDING_METHOD) {
-            log.info("method data for payment {} in status {}: ignored", payment.id(), payment.status());
+            log.info("{} for payment {} in status {}: ignored", source, payment.id(), payment.status());
             return;
         }
         Map<String, Object> fingerprint = new LinkedHashMap<>();
         fingerprint.put("threeDSServerTransID", transId);
-        fingerprint.put("threeDSCompInd", "Y");
+        fingerprint.put("threeDSCompInd", compInd);
 
         AdyenResponse answer;
         try {
             answer = adyen.paymentDetails(details(payment, "threeds2.fingerprint", codec.encodeBase64Url(fingerprint)),
-                    payment.id() + ":fingerprint");
+                    payment.id() + keySuffix);
         } catch (RestClientException noAnswer) {
-            fail(payment.id(), "no answer to the fingerprint: " + noAnswer.getMessage());
+            fail(payment.id(), source + ": no answer to the fingerprint: " + noAnswer.getMessage());
             return;
         }
         if (answer.ok() && "ChallengeShopper".equals(answer.resultCode())) {
             beginThreeDs(payment.id(), PaymentStatus.PENDING_CHALLENGE, answer.action());
             return;
         }
-        applyFinalAnswer(payment.id(), answer, "fingerprint");
+        applyFinalAnswer(payment.id(), answer, source + " fingerprint");
     }
 
     // ------------------------------------------------------------------ challenge step

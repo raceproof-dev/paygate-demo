@@ -39,7 +39,9 @@ paygate:
     # Where Stripe sends the browser back (a GET by the browser itself). Empty = public-base-url.
     return-base-url: ${PAYGATE_STRIPE_RETURN_BASE_URL:}
   method:
-    # How long the issuer gets for the 3DS method step before paygate refuses the payment itself (an artificial refusal).
+    # The browser gives up on the method step after 10 s and goes on without it (POST /3ds/method/skip). If neither
+    # the issuer nor the browser reports back (the shopper closed the page), paygate refuses the payment itself after
+    # this long (an artificial refusal).
     timeout: ${PAYGATE_METHOD_TIMEOUT:10m}
   challenge:
     # How long a shopper gets for the challenge before the watchdog submits "abandoned" (transStatus U).

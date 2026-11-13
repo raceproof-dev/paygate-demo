@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const FINAL = new Set(['COMPLETED', 'REFUSED', 'FAILED']);
 const POLL_MS = 500;
 const WATCH_AFTER_FINAL_MS = 120_000;   // keep watching: an unfixed bug or a late webhook can still change the status
+const METHOD_WAIT_MS = 10_000;          // EMV 3DS: how long the browser waits for the method step before going on without it
 
 const FIX_INFO = {
   c3: 'C3: a 704 on the challenge step means the other path already submitted it',
@@ -11,6 +12,10 @@ const FIX_INFO = {
 };
 
 let run = null;   // the payment in progress
+let lastFixes = {};   // the switches as paygate last reported them
+// The Fixes panel lists the selected PSP's fixes only (Stripe's ids start with s); ?fixes=all lists every one.
+const SHOW_ALL_FIXES = new URLSearchParams(location.search).get('fixes') === 'all';
+const fixPsp = (name) => (name.startsWith('s') ? 'stripe' : 'adyen');
 
 // ------------------------------------------------------------------ timeline
 
@@ -64,9 +69,11 @@ async function loadFixes() {
 }
 
 function renderFixes(fixes) {
+  lastFixes = fixes;
   const box = $('fixes');
   box.innerHTML = '';
   for (const [name, on] of Object.entries(fixes)) {
+    if (!SHOW_ALL_FIXES && fixPsp(name) !== $('psp').value) continue;
     const label = document.createElement('label');
     label.className = 'switch';
     label.innerHTML = '<input type="checkbox"><span class="track"></span><span class="text"></span>';
@@ -183,10 +190,12 @@ async function runMethod(action, notificationUrl) {
   if (run.methodFor.has(transId)) return;
   run.methodFor.add(transId);
   if (run.silentMethod) {
-    log('method step: the issuer stays silent (nothing is posted); paygate gives up when its method timeout runs out', 'note');
+    log(`method step: the issuer stays silent (nothing is posted); the browser goes on without it after ${METHOD_WAIT_MS / 1000} s`, 'note');
+    skipMethodAfterWait(transId);
     return;
   }
   if (token.threeDSMethodUrl) {
+    skipMethodAfterWait(transId);
     postToFrame('method-frame', token.threeDSMethodUrl, { threeDSMethodData: methodData(transId, notificationUrl) });
     log(`method step: hidden iframe posts to ${host(token.threeDSMethodUrl)}; the ACS answers paygate at ${notificationUrl}`);
   } else {
@@ -195,6 +204,23 @@ async function runMethod(action, notificationUrl) {
     await fetch('/3ds/method', { method: 'POST', body: data });
     log('method step: the card has no method URL; paygate told directly');
   }
+}
+
+/**
+ * EMV 3DS: if the ACS has not reported the method step within 10 s, the browser goes on without it. paygate then sends
+ * the fingerprint with threeDSCompInd N. (A late ACS notification can race this call.)
+ */
+function skipMethodAfterWait(transId) {
+  const mine = run;
+  setTimeout(async () => {
+    if (run !== mine || run.status !== 'PENDING_METHOD') return;
+    log(`method step: no answer from the issuer in ${METHOD_WAIT_MS / 1000} s; the browser tells paygate to go on (POST /3ds/method/skip)`, 'note');
+    try {
+      await api('POST', '/3ds/method/skip', { threeDSServerTransID: transId });
+    } catch (e) {
+      log(e.message, 'bad');
+    }
+  }, METHOD_WAIT_MS);
 }
 
 /** Challenge: the CReq is posted into a visible iframe; the ACS posts the CRes to paygate's notification URL when done. */
@@ -303,6 +329,7 @@ $('card').addEventListener('change', () => { $('custom-wrap').hidden = $('card')
 $('psp').addEventListener('change', () => {
   for (const el of document.querySelectorAll('[data-psp]')) el.hidden = el.dataset.psp !== $('psp').value;
   $('custom-wrap').hidden = $('psp').value !== 'adyen' || $('card').value !== 'custom';
+  renderFixes(lastFixes);
 });
 $('repost').addEventListener('click', repostCreq);
 $('abandon').addEventListener('click', abandon);

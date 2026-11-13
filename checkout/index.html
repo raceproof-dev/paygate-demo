@@ -50,7 +50,7 @@
       <fieldset data-psp="adyen">
         <legend>Shopper behaviour (edge cases)</legend>
         <label class="check"><input type="checkbox" id="silent-method"> Issuer never answers the method step
-          <small>no method iframe: paygate refuses the payment when its method timeout runs out</small></label>
+          <small>no method iframe: after 10 s the browser tells paygate to go on without it (threeDSCompInd N)</small></label>
       </fieldset>
 
       <button id="pay" type="submit">Pay</button>

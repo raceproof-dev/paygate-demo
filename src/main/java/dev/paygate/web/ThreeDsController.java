@@ -5,8 +5,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 /** Where the issuer's ACS posts back during 3DS (form posts, as browsers send them). */
 @RestController
@@ -25,6 +28,16 @@ public class ThreeDsController {
     public String method(@RequestParam("threeDSMethodData") String threeDsMethodData) {
         service.onMethodData(threeDsMethodData);
         return "ok";
+    }
+
+    /**
+     * 3DS method step, the browser's side: the ACS did not answer within 10 s, so the browser tells paygate to go on
+     * without it (threeDSCompInd N). Body: {"threeDSServerTransID": "..."}.
+     */
+    @PostMapping(path = "/3ds/method/skip", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, String> skipMethod(@RequestBody Map<String, String> body) {
+        service.onMethodSkipped(body.get("threeDSServerTransID"));
+        return Map.of("result", "ok");
     }
 
     /** Challenge step: the shopper's challenge result (CRes), or an error message (erro) from the ACS. */
